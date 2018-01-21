@@ -5,6 +5,6 @@ jobs:
       - image: circleci/build-image:latest
     steps:
       - checkout
-      - working_directory: ~/php7.2/apache
+      - run: cd ~/php7.2/apache
       - run: docker build -t brodleygroup .
   
