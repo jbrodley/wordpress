@@ -5,6 +5,7 @@ RUN set -ex; \
 	\
 	savedAptMark="$(apt-mark showmanual)"; \
 	\
+	export CFLAGS="$PHP_CFLAGS" CPPFLAGS="$PHP_CPPFLAGS" LDFLAGS="$PHP_LDFLAGS"; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
 		libjpeg-dev \
@@ -27,6 +28,15 @@ RUN set -ex; \
 	\
 	apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
 	rm -rf /var/lib/apt/lists/*
+
+# Configure Image Magic
+RUN export CFLAGS="$PHP_CFLAGS" CPPFLAGS="$PHP_CPPFLAGS" LDFLAGS="$PHP_LDFLAGS" \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libmagickwand-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && pecl install imagick-3.4.3 \
+    && docker-php-ext-enable imagick
 
 # set recommended PHP.ini settings
 # see https://secure.php.net/manual/en/opcache.installation.php
