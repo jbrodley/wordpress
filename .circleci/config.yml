@@ -1,1 +1,10 @@
-  d9981b015b054e11d03eae8b1ee1f148
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/build-image:latest
+    steps:
+      - checkout
+      - working_directory: ~/php7.2/apache
+      - run: docker build -t brodleygroup .
+  
