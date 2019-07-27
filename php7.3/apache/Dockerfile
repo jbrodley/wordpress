@@ -1,5 +1,6 @@
 FROM php:7.3-apache
 
+RUN apt update && apt install git -y
 # install the PHP extensions we need (https://make.wordpress.org/hosting/handbook/handbook/server-environment/#php-extensions)
 RUN set -ex; \
 	\
@@ -60,7 +61,6 @@ RUN { \
 		echo 'ignore_repeated_source = Off'; \
 		echo 'html_errors = Off'; \
 	} > /usr/local/etc/php/conf.d/error-logging.ini
-
 RUN a2enmod rewrite expires
 
 VOLUME /var/www/html
