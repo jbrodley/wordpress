@@ -1,15 +1,25 @@
 FROM php:7.2-alpine
 
-# install the PHP extensions we need
+# install the PHP extensions we need (https://make.wordpress.org/hosting/handbook/handbook/server-environment/#php-extensions)
 RUN set -ex; \
 	\
 	apk add --no-cache --virtual .build-deps \
+		$PHPIZE_DEPS \
+		imagemagick-dev \
 		libjpeg-turbo-dev \
 		libpng-dev \
 	; \
 	\
 	docker-php-ext-configure gd --with-png-dir=/usr --with-jpeg-dir=/usr; \
-	docker-php-ext-install gd mysqli opcache; \
+	docker-php-ext-install \
+		bcmath \
+		exif \
+		gd \
+		mysqli \
+		zip \
+	; \
+	pecl install imagick-3.4.4; \
+	docker-php-ext-enable imagick; \
 	\
 	runDeps="$( \
 		scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions \
@@ -21,18 +31,24 @@ RUN set -ex; \
 	apk del .build-deps
 
 # set recommended PHP.ini settings
-# see https://secure.php.net/manual/en/opcache.installation.php
+# excluding opcache due https://github.com/docker-library/wordpress/issues/407
+# https://codex.wordpress.org/Editing_wp-config.php#Configure_Error_Logging
 RUN { \
-		echo 'opcache.memory_consumption=128'; \
-		echo 'opcache.interned_strings_buffer=8'; \
-		echo 'opcache.max_accelerated_files=4000'; \
-		echo 'opcache.revalidate_freq=2'; \
-		echo 'opcache.fast_shutdown=1'; \
-		echo 'opcache.enable_cli=1'; \
-	} > /usr/local/etc/php/conf.d/opcache-recommended.ini
+		echo 'error_reporting = 4339'; \
+		echo 'display_errors = Off'; \
+		echo 'display_startup_errors = Off'; \
+		echo 'log_errors = On'; \
+		echo 'error_log = /dev/stderr'; \
+		echo 'log_errors_max_len = 1024'; \
+		echo 'ignore_repeated_errors = On'; \
+		echo 'ignore_repeated_source = Off'; \
+		echo 'html_errors = Off'; \
+	} > /usr/local/etc/php/conf.d/error-logging.ini
 
 # install wp-cli dependencies
 RUN apk add --no-cache \
+# bash is needed for 'wp shell': https://github.com/wp-cli/shell-command/blob/b8dafcc2a2eba5732fdee70be077675a302848e9/src/WP_CLI/REPL.php#L104
+		bash \
 		less \
 		mysql-client
 
@@ -42,14 +58,15 @@ RUN set -ex; \
 WORKDIR /var/www/html
 VOLUME /var/www/html
 
-# pub   2048R/2F6B6B7F 2016-01-07
-#       Key fingerprint = 3B91 9162 5F3B 1F1B F5DD  3B47 673A 0204 2F6B 6B7F
-# uid                  Daniel Bachhuber <daniel@handbuilt.co>
-# sub   2048R/45F9CDE2 2016-01-07
-ENV WORDPRESS_CLI_GPG_KEY 3B9191625F3B1F1BF5DD3B47673A02042F6B6B7F
+# https://make.wordpress.org/cli/2018/05/31/gpg-signature-change/
+# pub   rsa2048 2018-05-31 [SC]
+#       63AF 7AA1 5067 C056 16FD  DD88 A3A2 E8F2 26F0 BC06
+# uid           [ unknown] WP-CLI Releases <releases@wp-cli.org>
+# sub   rsa2048 2018-05-31 [E]
+ENV WORDPRESS_CLI_GPG_KEY 63AF7AA15067C05616FDDD88A3A2E8F226F0BC06
 
-ENV WORDPRESS_CLI_VERSION 1.4.1
-ENV WORDPRESS_CLI_SHA512 f861b5499e0b555a791ab6d76a0f3b1f033ae22aaee63dcdfaf8a0bd44886876690d40c6c95366d60f32d55f6282273e55f8ecdfa8787aec7b435cffe45790e7
+ENV WORDPRESS_CLI_VERSION 2.2.0
+ENV WORDPRESS_CLI_SHA512 2103f04a5014d629eaa42755815c9cec6bb489ed7b0ea6e77dedb309e8af098ab902b2f9c6369ae4b7cb8cc1f20fbb4dedcda83eb1d0c34b880fa6e8a3ae249d
 
 RUN set -ex; \
 	\
@@ -60,8 +77,9 @@ RUN set -ex; \
 	curl -o /usr/local/bin/wp.gpg -fSL "https://github.com/wp-cli/wp-cli/releases/download/v${WORDPRESS_CLI_VERSION}/wp-cli-${WORDPRESS_CLI_VERSION}.phar.gpg"; \
 	\
 	export GNUPGHOME="$(mktemp -d)"; \
-	gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$WORDPRESS_CLI_GPG_KEY"; \
+	gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys "$WORDPRESS_CLI_GPG_KEY"; \
 	gpg --batch --decrypt --output /usr/local/bin/wp /usr/local/bin/wp.gpg; \
+	command -v gpgconf && gpgconf --kill all || :; \
 	rm -rf "$GNUPGHOME" /usr/local/bin/wp.gpg; \
 	\
 	echo "$WORDPRESS_CLI_SHA512 */usr/local/bin/wp" | sha512sum -c -; \
